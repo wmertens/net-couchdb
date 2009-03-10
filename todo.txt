@@ -1,3 +1,4 @@
+
 * request design documents without encoding the internal '/' (this is because
   of a change to the CouchDB API)
 
@@ -7,6 +8,14 @@
 
 * prepare the distribution for the first release to CPAN,
   reread the docs
+
+------------------------ View API change -----------------
+
+* Change ViewResult to Search
+* When using the iterator view, fetch e.g. 200 rows at a time
+* Implement slurping for scalar results, arrays etc. The idea
+  is to quickly fetch a single reduce result, for example
+* Allow Search to be created without design docs
 
 ------------------------ Release to CPAN -----------------
 
@@ -18,6 +27,9 @@
   and give them to CouchDB.  See
   mid:6E29F30A-62C7-40FE-BEA2-BE5EFB89DF4C@apache.org on the couchdb-dev
   mailing list for details.
+  Possible way of doing it: when needed, fetch a number of UUIDs from /_uuids
+  and use until used up. Fetch however many fit into about 2 ethernet
+  packets.
 
 * implement an API for accessing temporary views.  Views should be
   represented as an object.  Performing operations on a view like
