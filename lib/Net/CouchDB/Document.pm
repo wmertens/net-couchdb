@@ -20,7 +20,6 @@ use constant _public => 4;  # public copy of 'data'
 use constant _deleted => 5; # is this document deleted in the database?
 sub new {
     my ($class, $db, $args) = @_;
-	die "Didn't get an argument hash" unless defined $args;
 
     my $self = bless [], $class;
     $self->[_db]     = $db;
@@ -75,7 +74,7 @@ sub exists {
 
 sub get {
     my ($self) = @_;
-	die "get() called on a document without id!" unless $self->id;
+	die "Need id to fetch myself..." unless $self->id;
 	my $res = $self->request( 'GET', {
 			description => 'get a document',
 			404         => 'ok', # Should we die?

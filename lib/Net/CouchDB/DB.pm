@@ -150,8 +150,7 @@ sub bulk {
         }
 
         # it must have been an insert
-        push @inserted_docs, $self->_document_class($id)->new({
-            db  => $self,
+        push @inserted_docs, $self->_document_class($id)->new($self,{
             id  => $id,
             rev => $rev,
         });
@@ -261,8 +260,7 @@ sub documents {
 
     my @documents;
     for my $row ( @{ $res->content->{rows} } ) {
-        push @documents, Net::CouchDB::Document->new({
-            db   => $self,
+        push @documents, Net::CouchDB::Document->new($self,{
             data => $row->{doc},
         });
     }

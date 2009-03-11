@@ -17,9 +17,9 @@ my $bar_original_rev = $bar->rev;
 ok !$foo->is_deleted, 'foo has not been deleted yet';
 my @docs = $couch->bulk({
     insert => [
-        { first  => 1 },
-        { second => 2 },
-        { third  => 3, _id => 'drei' },
+        { first  => '1' },
+        { second => '2' },
+        { third  => '3', _id => 'drei' },
     ],
     delete => [ $foo ],
     update => [ $bar ],
