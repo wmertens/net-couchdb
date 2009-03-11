@@ -178,23 +178,30 @@ sub document_exists {
     return $res->code != 404;
 }
 
-sub document {
-    my ($self, $document_id) = @_;
-    die "document() called without a document ID" if not defined $document_id;
-    my $res = $self->request( 'GET', URI::Escape::uri_escape($document_id), {
-       description => 'fetch a document',
-       404         => 'ok',  # should this die instead?
-       200         => 'ok',
-    });
-    return if $res->code == 404;    # there's no such document
-
-    # all is well
-    return $self->_document_class($document_id)->new({
-        db   => $self,
-        data => $res->content,
+sub design {
+    my ($self, $design_id) = @_;
+    die "design() called without a design ID" if not defined $design_id;
+    return Net::CouchDB::DesignDocument->new($self,{
+        id => '_design/'.$design_id
     });
 }
 
+sub doc {
+    my ($self, $document_id) = @_;
+    die "doc() called without a document ID" if not defined $document_id;
+    return $self->_document_class($document_id)->new($self,{
+        db   => $self,
+        id => $document_id
+    });
+}
+
+sub document {
+	my ($self, $document_id) = @_;
+	die "doc() called without a document ID" if not defined $document_id;
+	return $self->doc($document_id)->get;
+}
+
+# TODO rewrite this as a slurp view
 sub all_documents {
     my ($self, $args) = @_;
     my $res = $self->request('GET', '_all_docs', {
@@ -206,8 +213,7 @@ sub all_documents {
     # all is well
     my @documents;
     for my $row ( @{ $res->content->{rows} } ) {
-        push @documents, Net::CouchDB::Document->new({
-            db  => $self,
+        push @documents, Net::CouchDB::Document->new($self,{
             id  => $row->{id},
             rev => $row->{value}{rev},
         });
@@ -366,11 +372,32 @@ Accepts the same arguments as L</about>.
 Returns the size of the current database on disk.
 Accepts the same arguments as L</about>.
 
+=head2 design($id)
+
+Returns a single L<Net::CouchDB::DesignDocument> object representing the
+design whose ID is _design/C<$id>.
+
+Note that this does not check existence on the database, for that, call
+"get" or "exists" on the returned object:
+ if (my $doc = $db->design("id")->get) { ... }
+
+=head2 doc($id)
+
+Returns a single L<Net::CouchDB::Document> object representing the
+document whose ID is C<$id>.
+
+If C<$id> identifiers a design document (that is, C<$id> starts with
+"_design/"), the resulting object will be a L<Net::CouchDB::DesignDocument>,
+which is a subclass of L<Net::CouchDB::Document>.
+
+Note that this does not check existence on the database, for that, call
+"get" or "exists" on the returned object:
+ if (my $doc = $db->doc("id")->get) { ... }
+
 =head2 document($id)
 
 Returns a single L<Net::CouchDB::Document> object representing the
-document whose ID is C<$id>.  If the document does not exist, returns
-C<undef>.
+document whose ID is C<$id>, with the data fetched from the database.
 
 If C<$id> identifiers a design document (that is, C<$id> starts with
 "_design/"), the resulting object will be a L<Net::CouchDB::DesignDocument>,

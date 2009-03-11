@@ -5,6 +5,11 @@ use base qw( Net::CouchDB::Document );
 
 use Net::CouchDB::View;
 
+sub uri {
+    my ($self) = @_;
+    return URI->new_abs('_design/' . URI::Escape::uri_escape($self->name) . '/' , $self->db->uri );
+}
+
 sub language {
     my ($self) = @_;
     my $lang = $self->{language};

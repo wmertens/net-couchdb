@@ -24,9 +24,8 @@ sub document {
     my ($self) = @_;
 	if ($self->row->{doc}) {
 		my $class = $self->db->_document_class($self->id);
-		return $class->new({
-			db => $self->db,
-			data => $self->row->{doc}
+		return $class->new($self->result->view->design->db,{
+			keep_data => $self->row->{doc}
 		});
 	}
 

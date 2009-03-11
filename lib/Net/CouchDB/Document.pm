@@ -15,17 +15,24 @@ use constant _db     => 0;
 use constant _id     => 1;  # document ID
 use constant _rev    => 2;  # revision on which this document is based
 use constant _data   => 3;  # the original data from the server
+							# this is kept in order to do delayed copy
 use constant _public => 4;  # public copy of 'data'
 use constant _deleted => 5; # is this document deleted in the database?
 sub new {
-    my ($class, $args) = @_;
+    my ($class, $db, $args) = @_;
+	die "Didn't get an argument hash" unless defined $args;
 
     my $self = bless [], $class;
-    $self->[_db]     = $args->{db};
-    $self->[_id]     = $args->{id}  || $args->{data}{_id};
-    $self->[_rev]    = $args->{rev} || $args->{data}{_rev};
-    $self->[_data]   = $args->{data};
-    $self->[_public] = undef;
+    $self->[_db]     = $db;
+    if ($self->[_id] = $args->{id}) {
+		$self->[_rev] = $args->{rev};
+	} elsif ($self->[_data] = $args->{data}) {
+		$self->[_id]  = $args->{data}{_id};
+		$self->[_rev] = $args->{data}{_rev};
+	} elsif ($self->[_public] = $args->{keep_data}) {
+		$self->[_id]  = delete $args->{keep_data}{_id};
+		$self->[_rev] = delete $args->{keep_data}{_rev};
+	}
     $self->[_deleted] = 0;
     return $self;
 }
@@ -54,17 +61,51 @@ sub update {
     return;
 }
 
+sub exists {
+    my ($self) = @_;
+    return if not $self->id;
+    my $res = $self->request( 'HEAD', {
+       description => 'test a document',
+       404         => 'ok',
+       200         => 'ok',
+    });
+
+    return $res->code != 404;
+}
+
+sub get {
+    my ($self) = @_;
+	die "get() called on a document without id!" unless $self->id;
+	my $res = $self->request( 'GET', {
+			description => 'get a document',
+			404         => 'ok', # Should we die?
+			200         => 'ok',
+		});
+    if ($res->code == 404) {
+		$self->[_data] = undef;
+		$self->[_public] = undef;
+		return;
+	} else {
+		# We created this ourself so we can keep the data, no need to copy
+		$self->[_data] = undef;
+		$self->[_public] = $res->content;
+		delete $self->[_public]->{_id};
+		$self->[_rev] = delete $self->[_public]->{_rev};
+		return $self;
+	}
+}
+
 # this method lets us pretend that we're really a hashref
 sub data {
     my ($self) = @_;
 
     if ( not defined $self->[_public] ) {
         if ( not defined $self->[_data] ) {
-            my $res = $self->request( 'GET', {
-                description => 'get a document',
-                200         => 'ok',
-            });
-            $self->[_data] = $res->content;
+            if ($self->get) {
+				return $self->[_public];
+			} else {
+				return $self->[_public]={};
+			}
         }
         $self->[_public] = dclone $self->[_data];
         delete $self->[_public]->{_id};
@@ -178,11 +219,29 @@ available from the database but which was once available.
 
 =head1 METHODS
 
-=head2 new( $db, $id, $rev )
+=head2 new
+
+ new( $db, {})
+ new( $db, {id=>"id", rev=>"rev"})
+ new( $db, {data=>$hashrev})
+ new( $db, {keep_data=>$hashrev})
 
 Generally speaking, users should not call this method directly.  Document
 objects should be created by calling appropriate methods on a
 L<Net::CouchDB::DB> object such as "insert".
+
+Use the C<data> form for decoded JSON data that needs to be copied. The
+C<keep_data> form means the data can be modified.
+
+=head2 exists
+
+Tests if the document exists on the server. Returns true or false.
+
+=head2 get
+
+Fetches the document from the server, overwriting any data you stored.
+
+Returns self or undef if the document does not exist.
 
 =head2 attach
 
