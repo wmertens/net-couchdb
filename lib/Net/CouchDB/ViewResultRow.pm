@@ -17,13 +17,20 @@ sub result { shift->{result} }
 sub row    { shift->{row} }
 sub key    { shift->row->{key} }
 sub value  { shift->row->{value} }
+sub id     { shift->row->{id} }
+sub db     { shift->result->view->design->db }
 
 sub document {
     my ($self) = @_;
-    my $id = $self->row->{id};
+	if ($self->row->{doc}) {
+		my $class = $self->db->_document_class($self->id);
+		return $class->new({
+			db => $self->db,
+			data => $self->row->{doc}
+		});
+	}
 
-    # yuck!
-    return $self->result->view->design->db->document($id);
+    return $self->db->document($self->id);
 }
 
 1;
@@ -50,6 +57,16 @@ L<Net::CouchDB::ViewResult/first>.
 
 Returns a L<Net::CouchDB::Document> object representing the document from
 which this result row was derived.
+
+If include_docs=>"true" is used as a search parameter, CouchDB will supply the
+documents inline with the search results, resulting in less overall traffic.
+
+=head2 id
+
+Returns the DocID of the document that resulted in this row, which is the
+unique identifier of that document in this database.
+
+This is undefined for map+reduce queries.
 
 =head2 key
 
