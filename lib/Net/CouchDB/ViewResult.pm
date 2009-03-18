@@ -9,6 +9,8 @@ use URI;
 
 sub new {
     my $class = shift;
+    my $db    = shift || die "Need database";
+    my $uri   = shift || die "Need URI";
     my $args  = shift;
     my $json = Net::CouchDB->json;
 
@@ -26,7 +28,8 @@ sub new {
     }
 
     my $self = bless {
-        view   => delete $params{view},
+		db     => $db,
+		uri    => $uri,
         params => \%params,
         _pointer => 0,
     }, $class;
@@ -38,7 +41,8 @@ sub new {
     return $self;
 }
 
-sub view   { shift->{view}   }
+sub db     { shift->{db}   }
+sub uri    { shift->{uri} }
 sub params { shift->{params} }
 
 sub count {
@@ -59,6 +63,15 @@ sub first {
         result => $self,
         row    => $self->response->content->{rows}[0],
     });
+}
+
+sub fetchall {
+	my ($self, $keys, $values) = @_;
+	return if $self->count < 1;
+# TODO	slurp all into some data structure. Array of hashes?
+	# maybe it would be nice to throw away some data to make it easier
+	# to use in common cases, like simply hash key->value for reduce queries
+
 }
 
 sub next {
@@ -88,10 +101,8 @@ sub response {
     return $self->{response} = $res;
 }
 
-# use the design document's ua
-sub ua { shift->view->design->ua }
-
-sub uri { shift->view->uri }
+# use the db's ua
+sub ua { shift->db->ua }
 
 1;
 
@@ -123,7 +134,8 @@ method is called on the ViewResult object.
 =head2 new
 
 This method is only intended to be used internally.  The correct way to create
-a new ViewResult object is to call L<Net::CouchDB::View/search>.
+a new ViewResult object is to call L<Net::CouchDB::View/search> or
+L<Net::CouchDB::DB/view>.
 
 =head2 count
 
@@ -170,6 +182,17 @@ of particular interest are document below.
 Restricts the results to only those rows where the key matches the one given.
 Searching ViewResults by key is very fast because of the way that CouchDB
 handles indexes.
+
+=head3 group
+
+If the search is for a map+reduce view, setting group to "true" will return
+reduce values for each of the keys in the map. Otherwise, a globally reduced
+value will be returned.
+
+=head3 include_docs
+
+If set to "true", CouchDB will send documents inline with the search results.
+This reduces back-and-forth traffic and allows small view indexes.
 
 =head2 total_rows
 
