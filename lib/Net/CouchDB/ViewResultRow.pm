@@ -22,13 +22,13 @@ sub db     { shift->result->view->design->db }
 
 sub document {
     my ($self) = @_;
-	if ($self->row->{doc}) {
-		my $class = $self->db->_document_class($self->id);
-		return $class->new({
-			db => $self->db,
-			data => $self->row->{doc}
-		});
-	}
+    if ( $self->row->{doc} ) {
+        my $class = $self->db->_document_class( $self->id );
+        return $class->new({
+            db   => $self->db,
+            data => $self->row->{doc}
+        });
+    }
 
     return $self->db->document($self->id);
 }
@@ -56,7 +56,16 @@ L<Net::CouchDB::ViewResult/first>.
 =head2 document
 
 Returns a L<Net::CouchDB::Document> object representing the document from
-which this result row was derived.
+which this result row was derived.  If C<< include_docs => "true" >> was used
+as a search parameter (see L<Net::CouchDB::ViewResult/search>, the document
+object is returned without any additional HTTP requests.
+
+=head2 id
+
+Returns the DocID of the document that resulted in this row, which is the
+unique identifier of that document in this database.
+
+This is undefined for map+reduce queries.
 
 If include_docs=>"true" is used as a search parameter, CouchDB will supply the
 documents inline with the search results, resulting in less overall traffic.
@@ -85,6 +94,10 @@ value, an arrayref or a hashref because CouchDB map functions can emit any of
 those structures as values.
 
 =head1 INTERNAL METHODS
+
+=head2 db
+
+Returns the L<Net::CouchDB::DB> object associated with this row.
 
 =head2 row
 
