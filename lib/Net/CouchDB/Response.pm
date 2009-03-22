@@ -19,8 +19,10 @@ sub json { Net::CouchDB->json }
 sub content {
     my ($self) = @_;
     my $ct = $self->response->content_type;
-    return $self->json->decode( $self->response->content )
-        if $ct eq 'application/json';
+	if ($ct eq 'application/json') {
+		$self->{json} ||= $self->json->decode( $self->response->content );
+		return $self->{json}
+	}
     return $self->response->content;
 }
 
