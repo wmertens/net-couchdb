@@ -11,7 +11,7 @@ sub new {
     my $class = shift;
     my $db    = shift || die "Need database";
     my $uri   = shift || die "Need URI";
-    my $args  = shift;
+    my $args  = shift || {};
     my $json = Net::CouchDB->json;
 
     my %params = %$args;
@@ -57,21 +57,13 @@ sub total_rows {
 }
 
 sub first {
+	# TODO should this reset the _pointer?
     my ($self) = @_;
     return if $self->count < 1;
-    return Net::CouchDB::ViewResultRow->new({
-        result => $self,
-        row    => $self->response->content->{rows}[0],
-    });
-}
-
-sub fetchall {
-	my ($self, $keys, $values) = @_;
-	return if $self->count < 1;
-# TODO	slurp all into some data structure. Array of hashes?
-	# maybe it would be nice to throw away some data to make it easier
-	# to use in common cases, like simply hash key->value for reduce queries
-
+    return Net::CouchDB::ViewResultRow->new(
+		$self,
+        $self->response->content->{rows}[0]
+    );
 }
 
 sub next {
@@ -83,10 +75,45 @@ sub next {
         return;
     }
 
-    return Net::CouchDB::ViewResultRow->new({
-        result => $self,
-        row    => $self->response->content->{rows}[ $self->{_pointer}++ ],
-    });
+    return Net::CouchDB::ViewResultRow->new(
+        $self,
+        $self->response->content->{rows}[ $self->{_pointer}++ ]
+    );
+}
+
+sub all_rows_hash {
+	my $self = shift;
+	my %result;
+	for my $row (@{$self->response->content->{rows}}) {
+		$result{$row->{key}} = $row->{value};
+	}
+	return wantarray ? %result : \%result;
+}
+
+sub all_keys {
+	my $self = shift;
+	my @keys = map { ${$_}{key} } @{$self->response->content->{rows}};
+	return wantarray ? @keys : \@keys;
+}
+
+sub all_values {
+	my $self = shift;
+	my @values = map { $_->{value} } @{$self->response->content->{rows}};
+	return wantarray ? @values : \@values;
+}
+
+sub all_docs {
+	my ($self, $keys, $values) = @_;
+
+	my @documents;
+	# test if there is an id, in case this is a reduce view
+	if ($self->first && $self->first->id) {
+		while (my $row = $self->next) {
+			push @documents, $row->document;
+		}
+	}
+
+	return wantarray ? @documents : \@documents;
 }
 
 sub response {
@@ -134,8 +161,35 @@ method is called on the ViewResult object.
 =head2 new
 
 This method is only intended to be used internally.  The correct way to create
-a new ViewResult object is to call L<Net::CouchDB::View/search> or
-L<Net::CouchDB::DB/view>.
+a new ViewResult object is to call L<Net::CouchDB::View/search>,
+L<Net::CouchDB::DB/view> or L<Net::CouchDB::DB/all_documents>. All these calls
+take optional view arguments to further refine the result received from
+CouchDB.
+
+The view arguments can be any arguments accepted by CouchDB's view API.  For
+a complete list, see L<http://wiki.apache.org/couchdb/HttpViewApi>.  Arguments
+of particular interest are document below.
+
+=head3 key, startkey, endkey
+
+Restricts the results to only those rows where the key matches the one given,
+or is in the range indicated by startkey and endkey.
+
+Searching ViewResults by key is very fast because of the way that CouchDB
+handles indexes.
+
+=head3 group
+
+If the search is for a map+reduce view, setting group to "true" will return
+reduce values for each of the keys in the map. Otherwise, a globally reduced
+value will be returned.
+
+=head3 include_docs
+
+If this argument has the value 'true', both the search results and the
+corresponding documents are retrieved with a single HTTP request.  Calling
+L<Net::CouchDB::ViewResultRow/document> on rows from such a search requires no
+additional HTTP requests.
 
 =head2 count
 
@@ -153,69 +207,54 @@ C<undef>.
 Returns the next L<Net::CouchDB::ViewResultRow> until there are no
 more rows where it returns C<undef>.
 
-=head2 search
-
-This method is the workhorse of L<Net::CouchDB::ViewResult>.  It refines the
-view results by further restricting which rows will be returned.  Under
-typical usage, one starts with a ViewResult object that represents all the
-rows of a view.  One then searches within those results to find specific rows
-of interest.  For instance, if one is working with all the rows of a view
-
-    my $result = $view->search();
-    printf "The first of all rows has the key: %s", $result->first->key;
-
-she may then refine those same results further
-
-    my $cars = $result->search({ key => 'car' });
-    printf "The first car row has the key: %s", $cars->first->key;
-
-In your application, it's often convenient to return ViewResult objects and
-let other parts of the application build up the results that they want.
-Acceptable arguments to L</search> are described below.
-
-The search arguments can be any arguments accepted by CouchDB's view API.  For
-a complete list, see L<http://wiki.apache.org/couchdb/HttpViewApi>.  Arguments
-of particular interest are document below.
-
-=head3 include_docs
-
-If this argument has the value "true", both the search results and the
-corresponding documents are retrieved with a single HTTP request.  Calling
-L<Net::CouchDB::ViewResultRow/document> on rows from such a search requires no
-additional HTTP requests.
-
-=head3 key
-
-Restricts the results to only those rows where the key matches the one given.
-Searching ViewResults by key is very fast because of the way that CouchDB
-handles indexes.
-
-=head3 group
-
-If the search is for a map+reduce view, setting group to "true" will return
-reduce values for each of the keys in the map. Otherwise, a globally reduced
-value will be returned.
-
-=head3 include_docs
-
-If set to "true", CouchDB will send documents inline with the search results.
-This reduces back-and-forth traffic and allows small view indexes.
-
 =head2 total_rows
 
 Similar to L</count> but it returns the total number of rows that are
 available in the View regardless whether those rows are available in
 this result or not.
 
-=head2 view
+=head2 all_keys
 
-Returns a L<Net::CouchDB::View> object representing the view from which this
-result is derived.
+Returns an array or arrayref containing all keys in the view, in view order.
+
+=head2 all_values
+
+Returns an array or arrayref containing all values in the view, in view order.
+
+=head2 all_rows_hash
+
+Returns a hash or a hashref loaded with the key/value pairs of the view. No
+attempt is made to combine rows with the same key, the last row wins.
+
+This function only makes sense for views with unique and scalar keys, like a
+map+reduce view with a string or number as the key.
+
+=head2 all_docs
+
+Returns an array or arrayref containing all documents that were matched by the
+view. No attempt is made to make the list unique.
+
+This function only makes sense for map-only views which output one key/value
+pair per document that matches the view.
+
+A good use case for this is a view like this which selects all documents with a
+key called "foo", stored in a design "bar":
+
+ "all_foo":{"map":"function(doc) { doc.foo && emit(null, null); }"}
+
+You can then get all matching documents in one request, like this:
+
+ $db->view('bar','all_foo',{include_docs=>'true'})->all_docs
 
 =head1 INTERNAL METHODS
 
 These methods are intended for internal use.  They are documented here for
 completeness.
+
+=head2 db
+
+Returns a L<Net::CouchDB::DB> object representing the database from which this
+result is derived.
 
 =head2 params
 
@@ -235,8 +274,7 @@ database.
 
 =head2 uri
 
-Returns a L<URI> object indicating the URI of the view.  This is the same as
-calling C<< $self->view->uri >>.
+Returns a L<URI> object indicating the URI of the view.
 
 =head1 AUTHOR
 

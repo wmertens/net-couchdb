@@ -117,6 +117,10 @@ a design document, see L</add_view>.
 Returns a list (or arrayref, depending on context) of L<Net::CouchDB::View>
 objects representing all of the views defined within this design document.
 
+=head2 uri
+
+This is an internal function which returns the correct URI for this document
+
 =head1 AUTHOR
 
 Michael Hendricks  <michael@ndrix.org>

@@ -2,31 +2,31 @@ package Net::CouchDB::ViewResultRow;
 use warnings;
 use strict;
 
-sub new {
-    my $class = shift;
-    my $args  = shift;
+use constant _result => 0;
+use constant _row    => 1;
 
-    my $self = bless {
-        result => $args->{result},
-        row    => $args->{row},
-    }, $class;
+sub new {
+    my $class  = shift;
+    my $result = shift;
+    my $row    = shift;
+
+    my $self = bless [ $result, $row ], $class;
     return $self;
 }
 
-sub result { shift->{result} }
-sub row    { shift->{row} }
+sub result { shift->[_result] }
+sub row    { shift->[_row] }
 sub key    { shift->row->{key} }
 sub value  { shift->row->{value} }
 sub id     { shift->row->{id} }
-sub db     { shift->result->view->design->db }
+sub db     { shift->[_result]->db }
 
 sub document {
     my ($self) = @_;
     if ( $self->row->{doc} ) {
         my $class = $self->db->_document_class( $self->id );
-        return $class->new({
-            db   => $self->db,
-            data => $self->row->{doc}
+        return $class->new($self->db, {
+            keep_data => $self->row->{doc}
         });
     }
 

@@ -11,11 +11,7 @@
 
 ------------------------ View API change -----------------
 
-* Change ViewResult to Search
 * When using the iterator view, fetch e.g. 200 rows at a time
-* Implement slurping for scalar results, arrays etc. The idea
-  is to quickly fetch a single reduce result, for example
-* Allow Search to be created without design docs
 
 ------------------------ Release to CPAN -----------------
 

@@ -5,7 +5,7 @@ use Test::More;
 use lib 't/lib';
 use Test::CouchDB;
 my $couch = setup_tests({ create_db => 1 });
-plan tests => 26;
+plan tests => 35;
 
 # put some documents into the database
 $couch->insert(
@@ -28,6 +28,19 @@ my $view = $design->add_view('numbers', {
             else if ( num == 3 ) emit( 'three', doc.letter );
         }
     },
+});
+
+my $view_count = $design->add_view('numbers_count', {
+    map => q{
+        function (doc) {
+			emit( doc.number, 1 );
+        }
+    },
+	reduce => q{
+		function (keys,values,rereduce) {
+			return sum(values);
+		}
+	},
 });
 
 my $view_letters = $design->add_view('letters', {
@@ -104,3 +117,30 @@ while (my $row = $rs->next) {
 
 cmp_ok $rs->count, '==', 3, 'got the right row count';
 is_deeply \@rows, [ 'b', 'c',  'd' ], 'and the right results';
+
+#create a view directly from the DB, compare with previous search
+$rs = $couch->view('example','letters',{ startkey=> \'"b"', endkey=> \'"d"' });
+my @keys = $rs->all_keys;
+is_deeply \@keys, \@rows, 'DB->view works';
+
+#slurping utility functions
+$rs = $view->search({ key => 'two' });
+
+@keys = $rs->all_keys;
+is_deeply \@keys, [ 'two', 'two' ], 'got all keys';
+
+my @docs = $rs->all_docs;
+cmp_ok scalar @docs, '==', 2, 'got all documents';
+isa_ok( $_, 'Net::CouchDB::Document', 'a document' ) for @docs;
+
+$rs = $view_count->search({ group => 'true' });
+my %counts = $rs->all_rows_hash;
+is_deeply \%counts, { 1 => 1, 2 => 2, 3 => 3 }, 'got correct hash';
+
+my @values = $rs->all_values;
+is_deeply \@values, [ 1, 2, 3 ], 'got all values';
+
+#design docs
+my @designs = $couch->all_designs;
+cmp_ok scalar @designs, '==', 1, 'got all designs';
+isa_ok( $_, 'Net::CouchDB::DesignDocument', 'a design' ) for @designs;

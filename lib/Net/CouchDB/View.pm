@@ -20,10 +20,11 @@ sub design { shift->{design} }
 sub search {
     my $self = shift;
     my $args = shift || {};
-    return Net::CouchDB::ViewResult->new({
-        view => $self,
-        %$args
-    });
+    return Net::CouchDB::ViewResult->new(
+		$self->design->db,
+		$self->uri,
+		$args
+    );
 }
 
 sub uri {

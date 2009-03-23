@@ -191,7 +191,6 @@ sub doc {
     my ($self, $document_id) = @_;
     die "doc() called without a document ID" if not defined $document_id;
     return $self->_document_class($document_id)->new($self,{
-        db   => $self,
         id => $document_id
     });
 }
@@ -202,25 +201,36 @@ sub document {
 	return $self->doc($document_id)->get;
 }
 
-# TODO rewrite this as a slurp view
+sub view {
+	my ($self, $design, $name, $args) = @_;
+	die "view() called without a design name" if not defined $design;
+	die "view() called without a view name" if not defined $name;
+
+	return Net::CouchDB::ViewResult->new(
+		$self,
+		$self->uri.'_design/'.$design.'/_view/'.$name,
+		$args
+	);
+}
+
 sub all_documents {
     my ($self, $args) = @_;
-    my $res = $self->request('GET', '_all_docs', {
-        description => 'fetch all documents',
-        200         => 'ok',
-        params      => ($args || {}),
-    });
+	return Net::CouchDB::ViewResult->new(
+		$self,
+		$self->uri.'_all_docs',
+		$args
+	)->all_docs;
+}
 
-    # all is well
-    my @documents;
-    for my $row ( @{ $res->content->{rows} } ) {
-        push @documents, Net::CouchDB::Document->new($self,{
-            id  => $row->{id},
-            rev => $row->{value}{rev},
-        });
-    }
-
-    return wantarray ? @documents : \@documents;
+sub all_designs {
+    my ($self, $args) = @_;
+	$args->{startkey}='_design/';
+	$args->{endkey}='_design?';
+	return Net::CouchDB::ViewResult->new(
+		$self,
+		$self->uri.'_all_docs',
+		$args
+	)->all_docs;
 }
 
 sub couch {
@@ -244,6 +254,7 @@ sub clear {
     $self->couch->create_db($self->name);
 }
 
+# TODO implement the POST mechanism in ViewResult instead
 sub documents {
     my ( $self, @document_ids ) = @_;
     die "documents() called without document IDs" if not @document_ids;
@@ -318,16 +329,33 @@ An optional hashref of named arguments can be provided.  If the named argument
 "cached" is true, a cached copy of the previous information is returned.
 Otherwise, the information is fetched again from the server.
 
+=head2 view($design,$name)
+
+Returns a L<Net::CouchDB::ViewResult> object for the view C<$name> of the
+design C<$design>.
+
+L</view> accepts an optional hashref of view arguments which is passed directly
+to CouchDB. The possible view arguments are defined in the CouchDB HTTP View
+API.
 
 =head2 all_documents
 
+Returns a list (or arrayref, depending on context) of L<Net::CouchDB::Document>
+objects representing all the documents in the database.
+
+L</all_documents> accepts an optional hashref of view arguments which is passed
+directly to CouchDB. The possible view arguments are defined in the CouchDB
+HTTP View API.
+
+=head2 all_designs
+
 Returns a list (or arrayref, depending on context) of
-L<Net::CouchDB::Document> objects representing all the documents in the
+L<Net::CouchDB::DesignDocument> objects representing all the designs in the
 database.
 
-L</all_documents> accepts an optional hashref of arguments which is passed
-directly to CouchDB.  This allows one to request the first N documents or to
-sort the documents in a particular order.
+L</all_designs> accepts an optional hashref of view arguments which is passed
+directly to CouchDB. The possible view arguments are defined in the CouchDB
+HTTP View API.
 
 =head2 bulk(\%args)
 
