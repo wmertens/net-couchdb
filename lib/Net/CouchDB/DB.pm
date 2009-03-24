@@ -225,7 +225,8 @@ sub all_documents {
 sub all_designs {
     my ($self, $args) = @_;
 	$args->{startkey}='_design/';
-	$args->{endkey}='_design?';
+	$args->{endkey}='_design0';
+	$args->{inclusive_end}='false';
 	return Net::CouchDB::ViewResult->new(
 		$self,
 		$self->uri.'_all_docs',
